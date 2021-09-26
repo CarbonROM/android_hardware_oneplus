@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.lineageos.settings.doze
+package org.carbonrom.settings.doze
 
 import android.app.Service
 import android.content.BroadcastReceiver
