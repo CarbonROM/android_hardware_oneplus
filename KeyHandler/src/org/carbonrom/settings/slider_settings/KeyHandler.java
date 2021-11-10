@@ -22,11 +22,17 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.os.VibrationEffect;
 import android.media.session.MediaSessionLegacyHelper;
 import android.os.Handler;
 import android.os.Message;
+import android.os.PowerManager;
+import android.os.PowerManager.WakeLock;
 import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.os.Vibrator;
@@ -62,29 +68,53 @@ public class KeyHandler implements DeviceKeyHandler {
     }
 
     private final Context mContext;
+    private final PowerManager mPowerManager;
     private final NotificationManager mNotificationManager;
     private final AudioManager mAudioManager;
+    private SensorManager mSensorManager;
+    private Sensor mProximitySensor;
     private Vibrator mVibrator;
+    WakeLock mProximityWakeLock;
+    WakeLock mGestureWakeLock;
+    private int mProximityTimeOut;
+    private boolean mProximityWakeSupported;
 
     public KeyHandler(Context context) {
         mContext = context;
+        mPowerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         mNotificationManager
                 = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        mGestureWakeLock = mPowerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                "GestureWakeLock");
 
         mVibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+    }
+
+    private boolean hasSetupCompleted() {
+        return Settings.Secure.getInt(mContext.getContentResolver(),
+                Settings.Secure.USER_SETUP_COMPLETE, 0) != 0;
     }
 
     public KeyEvent handleKeyEvent(KeyEvent event) {
         int scanCode = event.getScanCode();
         String keyCode = Constants.sKeyMap.get(scanCode);
+        int keyCodeValue = 0;
 
-        // Check if we can handle the event and only handle ACTION_DOWN
-        if (keyCode == null || event.getAction() != KeyEvent.ACTION_DOWN) {
+        try {
+            keyCodeValue = Constants.getPreferenceInt(mContext, keyCode);
+        } catch (Exception e) {
+             return event;
+        }
+
+        if (!hasSetupCompleted()) {
             return event;
         }
 
-        int keyCodeValue = Constants.getPreferenceInt(mContext, keyCode);
+        // We only want ACTION_UP event
+        if (event.getAction() != KeyEvent.ACTION_UP) {
+            return null;
+        }
 
         mAudioManager.setRingerModeInternal(sSupportedSliderRingModes.get(keyCodeValue));
         mNotificationManager.setZenMode(sSupportedSliderZenModes.get(keyCodeValue), null, TAG);
@@ -97,5 +127,13 @@ public class KeyHandler implements DeviceKeyHandler {
             mVibrator.vibrate(VibrationEffect.get(
                     VibrationEffect.EFFECT_HEAVY_CLICK));
         }
+    }
+
+    public void handleNavbarToggle(boolean enabled) {
+        // do nothing
+    }
+
+    public boolean canHandleKeyEvent(KeyEvent event) {
+        return false;
     }
 }
